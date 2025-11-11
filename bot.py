@@ -18,6 +18,8 @@ if not BOT_TOKEN:
 
 ADMIN_ID = int(ADMIN_ID) if ADMIN_ID and ADMIN_ID.isdigit() else None
 
+GROUP_LINK = "https://t.me/+e8m9zn85h4c2YmVi"  # 🔗 Ссылка на группу ожидания
+
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
@@ -142,14 +144,47 @@ async def process_approve(callback: types.CallbackQuery):
     except Exception as e:
         print(f"Не удалось отправить сообщение пользователю {user_id}: {e}")
 
+# ✅ Обновлённое сообщение при отклонении заявки
 @dp.callback_query(lambda c: c.data and c.data.startswith("reject:"))
 async def process_reject(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
     try:
-        await bot.send_message(user_id, "❌ Твоя заявка отклонена")
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Да", callback_data=f"join_wait:{user_id}"),
+                InlineKeyboardButton(text="❌ Нет", callback_data="no_join")
+            ]
+        ])
+        await bot.send_message(
+            user_id,
+            "❌ Твоя заявка отклонена.\n"
+            "В клане сейчас нет свободных мест, "
+            "но ты можешь присоединиться к группе ожидания 🕓\n\n"
+            "Хочешь, чтобы я отправил ссылку на группу?",
+            reply_markup=keyboard
+        )
     except Exception as e:
         print(f"Не удалось отправить сообщение пользователю {user_id}: {e}")
+
+# ✅ Обработка ответа пользователя
+@dp.callback_query(lambda c: c.data and c.data.startswith("join_wait:"))
+async def join_wait_group(callback: types.CallbackQuery):
+    user_id = int(callback.data.split(":")[1])
+    await callback.message.edit_reply_markup()
+    await bot.send_message(
+        user_id,
+        f"🕓 Отлично! Вот [ссылка на группу ожидания]({GROUP_LINK}) 👇",
+        parse_mode="Markdown"
+    )
+
+@dp.callback_query(lambda c: c.data == "no_join")
+async def no_join(callback: types.CallbackQuery):
+    await callback.message.edit_reply_markup()
+    await bot.send_message(
+        callback.from_user.id,
+        "😌 Хорошо! Если что — всегда можешь написать позже ☘️"
+    )
 
 # ====== Запуск ======
 async def main():
