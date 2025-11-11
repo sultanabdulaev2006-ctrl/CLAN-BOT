@@ -1,1 +1,1 @@
-# BOT1
+# CLAN BOT
