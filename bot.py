@@ -18,7 +18,7 @@ if not BOT_TOKEN:
 
 ADMIN_ID = int(ADMIN_ID) if ADMIN_ID and ADMIN_ID.isdigit() else None
 
-# 🔗 НОВАЯ ссылка на группу ожидания (ПОСЛЕДНЯЯ, которую ты прислал)
+# 🔗 НОВАЯ ссылка на группу ожидания
 GROUP_LINK = "https://t.me/+S8yADtnHIRhiOGNi"
 
 bot = Bot(token=BOT_TOKEN)
@@ -48,14 +48,19 @@ async def start_web():
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
+
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="✅ Да"), KeyboardButton(text="❌ Нет")]
         ],
         resize_keyboard=True
     )
+
+    # 🔥 ДОБАВЛЕНО: имя Telegram-пользователя (first_name)
+    first_name = message.from_user.first_name
+
     await message.answer(
-        "🍀 Привет! Хочешь оставить заявку на вступление в клан?",
+        f"🍀 Привет, {first_name}! Хочешь оставить заявку на вступление в клан?",
         reply_markup=keyboard
     )
 
