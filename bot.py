@@ -120,8 +120,24 @@ async def finish_form(message: types.Message, state: FSMContext):
                 f"🕒 Время: {now}"
             )
 
-            await bot.send_photo(ADMIN_ID, photo_id, caption="📸 Скрин из профиля CPM")
-            await bot.send_message(ADMIN_ID, text, reply_markup=keyboard)
+            # ====== Отправка информации в группу ожидания ======
+            group_chat_id = 3156012968  # Это ID твоей группы
+            thread_id = 20  # ID темы (обсуждения)
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="Удалить", callback_data=f"remove_user:{message.from_user.id}"),
+                    InlineKeyboardButton(text="Заблокировать", callback_data=f"block_user:{message.from_user.id}"),
+                    InlineKeyboardButton(text="Добавить в клан", callback_data=f"add_to_clan:{message.from_user.id}")
+                ]
+            ])
+
+            await bot.send_message(
+                group_chat_id,
+                text,
+                reply_markup=keyboard,
+                thread_id=thread_id  # Отправка в нужную тему
+            )
 
         except Exception as e:
             print(f"Ошибка при отправке админу: {e}")
@@ -170,39 +186,11 @@ async def process_reject(callback: types.CallbackQuery):
 @dp.callback_query(lambda c: c.data and c.data.startswith("join_wait:"))
 async def join_wait_group(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
-    
-    # Получаем информацию о пользователе
-    user = await bot.get_chat_member(callback.message.chat.id, user_id)
-    first_name = user.user.first_name
-    last_name = user.user.last_name
-    username = user.user.username
-
-    # Указываем ID темы, в которую нужно отправить сообщение (ID темы = 20)
-    thread_id = 20  # Здесь указываем ID вашей темы
-
-    # Отправляем информацию о пользователе в группу/канал ожидания
-    group_chat_id = "@waiting_group"  # Замените на ID вашей группы ожидания или её username
-    message = (
-        f"👤 Новый пользователь в группе ожидания!\n"
-        f"Имя: {first_name} {last_name}\n"
-        f"Username: @{username}\n"
-        f"ID: {user_id}"
-    )
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="Удалить", callback_data=f"remove_user:{user_id}"),
-            InlineKeyboardButton(text="Заблокировать", callback_data=f"block_user:{user_id}"),
-            InlineKeyboardButton(text="Добавить в клан", callback_data=f"add_to_clan:{user_id}")
-        ]
-    ])
-
-    # Отправляем сообщение в конкретную тему (поток обсуждений) группы
+    await callback.message.edit_reply_markup()
     await bot.send_message(
-        group_chat_id,
-        message,
-        reply_markup=keyboard,
-        thread_id=thread_id  # Указываем thread_id для отправки в конкретную тему
+        user_id,
+        f"🕓 Отлично! Вот ссылка на группу ожидания: {GROUP_LINK}",
+        parse_mode="Markdown"
     )
 
 @dp.callback_query(lambda c: c.data == "no_join")
@@ -214,4 +202,7 @@ async def no_join(callback: types.CallbackQuery):
 async def main():
     asyncio.create_task(start_web())  # запускаем web-сервер параллельно
     print("🤖 Бот запущен и работает 24/7")
-    await dp.start_polling
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
