@@ -170,11 +170,39 @@ async def process_reject(callback: types.CallbackQuery):
 @dp.callback_query(lambda c: c.data and c.data.startswith("join_wait:"))
 async def join_wait_group(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
-    await callback.message.edit_reply_markup()
+    
+    # Получаем информацию о пользователе
+    user = await bot.get_chat_member(callback.message.chat.id, user_id)
+    first_name = user.user.first_name
+    last_name = user.user.last_name
+    username = user.user.username
+
+    # Указываем ID темы, в которую нужно отправить сообщение (ID темы = 20)
+    thread_id = 20  # Здесь указываем ID вашей темы
+
+    # Отправляем информацию о пользователе в группу/канал ожидания
+    group_chat_id = "@waiting_group"  # Замените на ID вашей группы ожидания или её username
+    message = (
+        f"👤 Новый пользователь в группе ожидания!\n"
+        f"Имя: {first_name} {last_name}\n"
+        f"Username: @{username}\n"
+        f"ID: {user_id}"
+    )
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Удалить", callback_data=f"remove_user:{user_id}"),
+            InlineKeyboardButton(text="Заблокировать", callback_data=f"block_user:{user_id}"),
+            InlineKeyboardButton(text="Добавить в клан", callback_data=f"add_to_clan:{user_id}")
+        ]
+    ])
+
+    # Отправляем сообщение в конкретную тему (поток обсуждений) группы
     await bot.send_message(
-        user_id,
-        f"🕓 Отлично! Вот ссылка на группу ожидания: {GROUP_LINK}",
-        parse_mode="Markdown"
+        group_chat_id,
+        message,
+        reply_markup=keyboard,
+        thread_id=thread_id  # Указываем thread_id для отправки в конкретную тему
     )
 
 @dp.callback_query(lambda c: c.data == "no_join")
@@ -186,7 +214,4 @@ async def no_join(callback: types.CallbackQuery):
 async def main():
     asyncio.create_task(start_web())  # запускаем web-сервер параллельно
     print("🤖 Бот запущен и работает 24/7")
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    await dp.start_polling
