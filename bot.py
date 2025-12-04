@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
     ReplyKeyboardMarkup, KeyboardButton,
-    InlineKeyboardMarkup, InlineKeyboardButton
+    InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated
 )
 from aiohttp import web
 from datetime import datetime
@@ -18,18 +18,17 @@ from datetime import datetime
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-# Группа куда отправляется "информация об участнике"
 GROUP_CHAT_ID = -1003156012968
 TOPIC_THREAD_ID = 20  # id темы
 
-# Новая группа (кнопка "Добавить в группу")
 NEW_GROUP_LINK = "https://t.me/+moSa3x2Nbyo4NzBi"
-
-# Группа ожидания
 GROUP_LINK = "https://t.me/+S8yADtnHIRhiOGNi"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
+
+# Словарь для хранения message_id сообщений участников
+messages_in_group = {}
 
 # ----------------------------
 # FSM
@@ -47,12 +46,10 @@ class Form(StatesGroup):
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
-
     keyboard = ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="✅ Да"), KeyboardButton(text="❌ Нет")]],
         resize_keyboard=True
     )
-
     await message.answer(
         f"🍀 Привет, {message.from_user.first_name}! Хочешь оставить заявку на вступление в клан?",
         reply_markup=keyboard
@@ -64,11 +61,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 @dp.message(F.text == "✅ Да")
 async def ask_age(message: types.Message, state: FSMContext):
     await state.set_state(Form.age)
-    await message.answer(
-        "🔞 Сколько тебе лет?",
-        reply_markup=types.ReplyKeyboardRemove()
-    )
-
+    await message.answer("🔞 Сколько тебе лет?", reply_markup=types.ReplyKeyboardRemove())
 
 @dp.message(F.text == "❌ Нет")
 async def cancel(message: types.Message, state: FSMContext):
@@ -78,13 +71,11 @@ async def cancel(message: types.Message, state: FSMContext):
         reply_markup=types.ReplyKeyboardRemove()
     )
 
-
 @dp.message(Form.age)
 async def ask_nickname(message: types.Message, state: FSMContext):
     await state.update_data(age=message.text)
     await state.set_state(Form.nickname)
     await message.answer("🎮 Напиши свой игровой ник.")
-
 
 @dp.message(Form.nickname)
 async def ask_game_id(message: types.Message, state: FSMContext):
@@ -92,13 +83,11 @@ async def ask_game_id(message: types.Message, state: FSMContext):
     await state.set_state(Form.game_id)
     await message.answer("💻✍🏻 Отправь свой ID из CPM.")
 
-
 @dp.message(Form.game_id)
 async def ask_screenshot(message: types.Message, state: FSMContext):
     await state.update_data(game_id=message.text)
     await state.set_state(Form.screenshot)
     await message.answer("📸 Отлично! Теперь отправь скриншот из своего профиля CPM 👇🏻")
-
 
 @dp.message(Form.screenshot, F.photo)
 async def finish(message: types.Message, state: FSMContext):
@@ -113,7 +102,6 @@ async def finish(message: types.Message, state: FSMContext):
     # ОТПРАВКА АДМИНУ
     # ----------------------------
     now = datetime.now().strftime("%d.%m.%Y, %H:%M")
-
     admin_text = (
         "📥 Новая заявка в клан XARIZMA!\n\n"
         f"👤 Имя: {message.from_user.full_name}\n"
@@ -124,23 +112,16 @@ async def finish(message: types.Message, state: FSMContext):
         f"💻 Игровой ID: {data['game_id']}\n"
         f"🕒 Время: {now}"
     )
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    keyboard_admin = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve:{message.from_user.id}"),
             InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject:{message.from_user.id}")
         ]
     ])
-
-    await bot.send_photo(
-        ADMIN_ID,
-        photo_id,
-        caption=admin_text,
-        reply_markup=keyboard
-    )
+    await bot.send_photo(ADMIN_ID, photo_id, caption=admin_text, reply_markup=keyboard_admin)
 
     # ----------------------------
-    # ОТПРАВКА В ГРУППУ (только 3 поля)
+    # ОТПРАВКА В ГРУППУ
     # ----------------------------
     group_text = (
         "📌 Новая информация об участнике:\n\n"
@@ -148,100 +129,82 @@ async def finish(message: types.Message, state: FSMContext):
         f"🎮 Игровой ник: {data['nickname']}\n"
         f"🔗 Username: @{message.from_user.username}"
     )
-
     group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="➕ Добавить в группу", callback_data=f"addgroup:{message.from_user.id}"),
-        ],
+        [InlineKeyboardButton(text="➕ Добавить в группу", callback_data=f"addgroup:{message.from_user.id}")],
         [
             InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{message.from_user.id}"),
             InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{message.from_user.id}")
         ]
     ])
+    msg = await bot.send_message(GROUP_CHAT_ID, group_text, message_thread_id=TOPIC_THREAD_ID, reply_markup=group_keyboard)
 
-    await bot.send_message(
-        GROUP_CHAT_ID,
-        group_text,
-        message_thread_id=TOPIC_THREAD_ID,
-        reply_markup=group_keyboard
-    )
+    # Сохраняем message_id для автоделита
+    messages_in_group[message.from_user.id] = msg.message_id
 
-# ----------------------------
-# Ошибка если нет фото
-# ----------------------------
 @dp.message(Form.screenshot)
 async def no_photo(message: types.Message):
     await message.answer("⚠️ Пожалуйста, отправь фото из профиля CPM.")
 
-
 # ----------------------------
-# Callback — админу
+# CALLBACK — Админ (Одобрить/Отклонить)
 # ----------------------------
 @dp.callback_query(F.data.startswith("approve:"))
 async def approve(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
-    await bot.send_message(
-        user_id,
+    await bot.send_message(user_id,
         "✅ Твоя заявка одобрена.\n"
         "Добро пожаловать в clan.\n"
         "Здесь ценят спокойствие, уверенность и силу."
     )
 
-
 @dp.callback_query(F.data.startswith("reject:"))
 async def reject(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
-
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="✅ Да", callback_data=f"join_wait:{user_id}"),
             InlineKeyboardButton(text="❌ Нет", callback_data="no_join")
         ]
     ])
-
-    await bot.send_message(
-        user_id,
+    await bot.send_message(user_id,
         "❌ Твоя заявка отклонена.\n"
         "В клане сейчас нет свободных мест, но ты можешь присоединиться к группе ожидания 🕓\n\n"
         "Хочешь, чтобы я отправил ссылку на группу?",
         reply_markup=keyboard
     )
 
-
 # ----------------------------
-# Callback — группа кнопки
+# CALLBACK — Группа кнопки (молча)
 # ----------------------------
 @dp.callback_query(F.data.startswith("addgroup:"))
 async def add_group(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
-    await bot.send_message(user_id, f"Вот ссылка на новую группу:\n{NEW_GROUP_LINK}")
-    await callback.answer("Отправлено пользователю!")
-
+    member = await bot.get_chat_member(GROUP_CHAT_ID, callback.from_user.id)
+    if member.is_chat_admin():  # кнопки доступны только админам
+        await bot.send_message(user_id, f"Вот ссылка на новую группу:\n{NEW_GROUP_LINK}")
 
 @dp.callback_query(F.data.startswith("kick:"))
 async def kick_user(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
-
-    try:
-        await bot.ban_chat_member(GROUP_CHAT_ID, user_id)
-        await bot.unban_chat_member(GROUP_CHAT_ID, user_id)
-        await callback.answer("Пользователь удалён.")
-    except:
-        await callback.answer("Ошибка. У бота недостаточно прав.")
-
+    member = await bot.get_chat_member(GROUP_CHAT_ID, callback.from_user.id)
+    if member.is_chat_admin():
+        try:
+            await bot.ban_chat_member(GROUP_CHAT_ID, user_id)
+            await bot.unban_chat_member(GROUP_CHAT_ID, user_id)
+        except:
+            pass
 
 @dp.callback_query(F.data.startswith("ban:"))
 async def ban_user(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
-
-    try:
-        await bot.ban_chat_member(GROUP_CHAT_ID, user_id)
-        await callback.answer("Пользователь заблокирован.")
-    except:
-        await callback.answer("Ошибка. У бота недостаточно прав.")
-
+    member = await bot.get_chat_member(GROUP_CHAT_ID, callback.from_user.id)
+    if member.is_chat_admin():
+        try:
+            await bot.ban_chat_member(GROUP_CHAT_ID, user_id)
+        except:
+            pass
 
 # ----------------------------
 # Группа ожидания
@@ -252,15 +215,25 @@ async def join_wait(callback: types.CallbackQuery):
     await callback.message.edit_reply_markup()
     await bot.send_message(user_id, f"🕓 Отлично! Вот ссылка на группу ожидания:\n{GROUP_LINK}")
 
-
 @dp.callback_query(F.data == "no_join")
 async def no_join(callback: types.CallbackQuery):
     await callback.message.edit_reply_markup()
-    await bot.send_message(
-        callback.from_user.id,
-        "😌 Хорошо! Если что — всегда можешь написать позже ☘️"
-    )
+    await bot.send_message(callback.from_user.id, "😌 Хорошо! Если что — всегда можешь написать позже ☘️")
 
+# ----------------------------
+# Автоудаление сообщения, если пользователь выходит из группы
+# ----------------------------
+@dp.chat_member()
+async def member_update(event: ChatMemberUpdated):
+    user_id = event.from_user.id
+    if event.old_chat_member.is_member() and not event.new_chat_member.is_member():
+        msg_id = messages_in_group.get(user_id)
+        if msg_id:
+            try:
+                await bot.delete_message(GROUP_CHAT_ID, msg_id)
+                del messages_in_group[user_id]
+            except:
+                pass
 
 # ----------------------------
 # Render server + polling
@@ -268,21 +241,15 @@ async def no_join(callback: types.CallbackQuery):
 async def dummy(request):
     return web.Response(text="ok")
 
-
 async def start_polling_and_server():
     polling_task = asyncio.create_task(dp.start_polling(bot))
-
     app = web.Application()
     app.router.add_get("/", dummy)
-
     runner = web.AppRunner(app)
     await runner.setup()
-
     site = web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080)))
     await site.start()
-
     await polling_task
-
 
 if __name__ == "__main__":
     print("🤖 Бот запущен (Render + polling)")
