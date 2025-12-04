@@ -176,36 +176,57 @@ async def reject(callback: types.CallbackQuery):
     )
 
 # ----------------------------
-# CALLBACK — Группа кнопки (только админы, молча)
+# Проверка, является ли пользователь админом
 # ----------------------------
 async def is_admin(user_id: int):
-    member = await bot.get_chat_member(GROUP_CHAT_ID, user_id)
-    return member.status in ["administrator", "creator"]
+    try:
+        member = await bot.get_chat_member(GROUP_CHAT_ID, user_id)
+        return member.status in ["administrator", "creator"]
+    except:
+        return False
 
+# ----------------------------
+# CALLBACK — Группа кнопки (только админы)
+# ----------------------------
 @dp.callback_query(F.data.startswith("addgroup:"))
 async def add_group(callback: types.CallbackQuery):
-    if await is_admin(callback.from_user.id):
-        user_id = int(callback.data.split(":")[1])
-        await bot.send_message(user_id, f"Вот ссылка на новую группу:\n{NEW_GROUP_LINK}")
+    if not await is_admin(callback.from_user.id):
+        await callback.answer("❌ Только админы могут использовать эту кнопку.", show_alert=True)
+        return
+
+    user_id = int(callback.data.split(":")[1])
+    try:
+        await bot.send_message(user_id, f"✅ Ты добавлен в группу! Вот ссылка:\n{NEW_GROUP_LINK}")
+        await callback.answer("✅ Ссылка отправлена пользователю", show_alert=True)
+    except:
+        await callback.answer("⚠️ Не удалось отправить пользователю сообщение. Возможно, он удалил бота.", show_alert=True)
 
 @dp.callback_query(F.data.startswith("kick:"))
 async def kick_user(callback: types.CallbackQuery):
-    if await is_admin(callback.from_user.id):
-        user_id = int(callback.data.split(":")[1])
-        try:
-            await bot.ban_chat_member(GROUP_CHAT_ID, user_id)
-            await bot.unban_chat_member(GROUP_CHAT_ID, user_id)
-        except:
-            pass
+    if not await is_admin(callback.from_user.id):
+        await callback.answer("❌ Только админы могут использовать эту кнопку.", show_alert=True)
+        return
+
+    user_id = int(callback.data.split(":")[1])
+    try:
+        await bot.ban_chat_member(GROUP_CHAT_ID, user_id)
+        await bot.unban_chat_member(GROUP_CHAT_ID, user_id)
+        await callback.answer("✅ Пользователь удалён из группы", show_alert=True)
+    except Exception as e:
+        await callback.answer(f"⚠️ Не удалось удалить пользователя: {e}", show_alert=True)
 
 @dp.callback_query(F.data.startswith("ban:"))
 async def ban_user(callback: types.CallbackQuery):
-    if await is_admin(callback.from_user.id):
-        user_id = int(callback.data.split(":")[1])
-        try:
-            await bot.ban_chat_member(GROUP_CHAT_ID, user_id)
-        except:
-            pass
+    if not await is_admin(callback.from_user.id):
+        await callback.answer("❌ Только админы могут использовать эту кнопку.", show_alert=True)
+        return
+
+    user_id = int(callback.data.split(":")[1])
+    try:
+        await bot.ban_chat_member(GROUP_CHAT_ID, user_id)
+        await callback.answer("⛔ Пользователь заблокирован в группе", show_alert=True)
+    except Exception as e:
+        await callback.answer(f"⚠️ Не удалось заблокировать пользователя: {e}", show_alert=True)
 
 # ----------------------------
 # Группа ожидания
