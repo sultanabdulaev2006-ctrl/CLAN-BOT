@@ -147,7 +147,6 @@ async def approve(callback: types.CallbackQuery):
         await callback.answer("❌ Данные пользователя не найдены.", show_alert=True)
         return
 
-    # Одобрено: отправляем ссылку на основную группу
     await bot.send_message(user_id,
         "✅ Твоя заявка одобрена!\nДобро пожаловать в клан.\n"
         f"Вот ссылка для вступления в группу:\n{NEW_GROUP_LINK}"
@@ -159,7 +158,6 @@ async def reject(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
 
-    # Отклонено: спрашиваем пользователя хочет ли ссылку на группу ожидания
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="✅ Да", callback_data=f"join_wait:{user_id}"),
@@ -180,7 +178,9 @@ async def reject(callback: types.CallbackQuery):
 async def join_wait(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
+
     await bot.send_message(user_id, f"🕓 Отлично! Вот ссылка на группу ожидания:\n{WAIT_GROUP_LINK}")
+    await callback.answer("✅ Ссылка на группу ожидания отправлена", show_alert=True)
 
 @dp.callback_query(F.data.startswith("no_join:"))
 async def no_join(callback: types.CallbackQuery):
@@ -239,37 +239,37 @@ async def ban_user(callback: types.CallbackQuery):
         await callback.answer(f"⚠️ Не удалось заблокировать пользователя: {e}", show_alert=True)
 
 # ----------------------------
-# Обработка вступления в группу ожидания
+# Автопубликация после вступления в группу ожидания и автоудаление при выходе
 # ----------------------------
 @dp.chat_member()
 async def member_update(event: ChatMemberUpdated):
     user_id = event.from_user.id
 
-    # Пользователь вступил в группу ожидания — публикуем в ветку
-    if not event.old_chat_member.is_member() and event.new_chat_member.is_member():
+    # Пользователь только что вступил в группу ожидания
+    if (not event.old_chat_member.is_member() and event.new_chat_member.is_member()):
         data = stored_applications.get(user_id)
-        if not data:
-            return
+        if data:
+            # Публикуем информацию в ветку
+            group_text = (
+                "📌 Новая информация об участнике:\n\n"
+                f"🆔 Игровой ID: {data['game_id']}\n"
+                f"🎮 Игровой ник: {data['nickname']}\n"
+                f"🔗 Username: @{data['username']}"
+            )
+            group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="➕ Добавить в группу", callback_data=f"addgroup:{user_id}")],
+                [
+                    InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}"),
+                    InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")
+                ]
+            ])
+            msg = await bot.send_message(GROUP_CHAT_ID, group_text, message_thread_id=TOPIC_THREAD_ID, reply_markup=group_keyboard)
+            messages_in_group[user_id] = msg.message_id
 
-        group_text = (
-            "📌 Новая информация об участнике:\n\n"
-            f"🆔 Игровой ID: {data['game_id']}\n"
-            f"🎮 Игровой ник: {data['nickname']}\n"
-            f"🔗 Username: @{data['username']}"
-        )
-        group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="➕ Добавить в группу", callback_data=f"addgroup:{user_id}")],
-            [
-                InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}"),
-                InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")
-            ]
-        ])
-        msg = await bot.send_message(GROUP_CHAT_ID, group_text, message_thread_id=TOPIC_THREAD_ID, reply_markup=group_keyboard)
-        messages_in_group[user_id] = msg.message_id
-        del stored_applications[user_id]
+            del stored_applications[user_id]
 
-    # Автоудаление сообщения, если пользователь выходит из группы
-    if event.old_chat_member.is_member() and not event.new_chat_member.is_member():
+    # Автоудаление сообщений если пользователь вышел
+    elif event.old_chat_member.is_member() and not event.new_chat_member.is_member():
         msg_id = messages_in_group.get(user_id)
         if msg_id:
             try:
