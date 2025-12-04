@@ -176,20 +176,22 @@ async def reject(callback: types.CallbackQuery):
     )
 
 # ----------------------------
-# CALLBACK — Группа кнопки (молча)
+# CALLBACK — Группа кнопки (только админы, молча)
 # ----------------------------
+async def is_admin(user_id: int):
+    member = await bot.get_chat_member(GROUP_CHAT_ID, user_id)
+    return member.status in ["administrator", "creator"]
+
 @dp.callback_query(F.data.startswith("addgroup:"))
 async def add_group(callback: types.CallbackQuery):
-    user_id = int(callback.data.split(":")[1])
-    member = await bot.get_chat_member(GROUP_CHAT_ID, callback.from_user.id)
-    if member.is_chat_admin():  # кнопки доступны только админам
+    if await is_admin(callback.from_user.id):
+        user_id = int(callback.data.split(":")[1])
         await bot.send_message(user_id, f"Вот ссылка на новую группу:\n{NEW_GROUP_LINK}")
 
 @dp.callback_query(F.data.startswith("kick:"))
 async def kick_user(callback: types.CallbackQuery):
-    user_id = int(callback.data.split(":")[1])
-    member = await bot.get_chat_member(GROUP_CHAT_ID, callback.from_user.id)
-    if member.is_chat_admin():
+    if await is_admin(callback.from_user.id):
+        user_id = int(callback.data.split(":")[1])
         try:
             await bot.ban_chat_member(GROUP_CHAT_ID, user_id)
             await bot.unban_chat_member(GROUP_CHAT_ID, user_id)
@@ -198,9 +200,8 @@ async def kick_user(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("ban:"))
 async def ban_user(callback: types.CallbackQuery):
-    user_id = int(callback.data.split(":")[1])
-    member = await bot.get_chat_member(GROUP_CHAT_ID, callback.from_user.id)
-    if member.is_chat_admin():
+    if await is_admin(callback.from_user.id):
+        user_id = int(callback.data.split(":")[1])
         try:
             await bot.ban_chat_member(GROUP_CHAT_ID, user_id)
         except:
