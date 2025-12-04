@@ -29,6 +29,8 @@ dp = Dispatcher(storage=MemoryStorage())
 
 # Словарь для хранения message_id сообщений участников
 messages_in_group = {}
+# Словарь для хранения данных анкеты до вступления в группу
+stored_applications = {}
 
 # ----------------------------
 # FSM
@@ -95,6 +97,16 @@ async def finish(message: types.Message, state: FSMContext):
     photo_id = message.photo[-1].file_id
     await state.clear()
 
+    # Сохраняем данные анкеты до вступления
+    stored_applications[message.from_user.id] = {
+        "age": data["age"],
+        "nickname": data["nickname"],
+        "game_id": data["game_id"],
+        "username": message.from_user.username,
+        "full_name": message.from_user.full_name,
+        "photo_id": photo_id
+    }
+
     # Сообщение пользователю
     await message.answer("☘️ Твоя заявка отправлена и сейчас находится на рассмотрении. 🕒")
 
@@ -120,30 +132,13 @@ async def finish(message: types.Message, state: FSMContext):
     ])
     await bot.send_photo(ADMIN_ID, photo_id, caption=admin_text, reply_markup=keyboard_admin)
 
-    # ----------------------------
-    # ОТПРАВКА В ГРУППУ
-    # ----------------------------
-    group_text = (
-        "📌 Новая информация об участнике:\n\n"
-        f"🆔 Игровой ID: {data['game_id']}\n"
-        f"🎮 Игровой ник: {data['nickname']}\n"
-        f"🔗 Username: @{message.from_user.username}"
-    )
-    group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ Добавить в группу", callback_data=f"addgroup:{message.from_user.id}")],
-        [
-            InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{message.from_user.id}"),
-            InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{message.from_user.id}")
-        ]
-    ])
-    msg = await bot.send_message(GROUP_CHAT_ID, group_text, message_thread_id=TOPIC_THREAD_ID, reply_markup=group_keyboard)
-
-    # Сохраняем message_id для автоделита
-    messages_in_group[message.from_user.id] = msg.message_id
+    # Отправка ссылки пользователю для вступления в группу
+    await bot.send_message(message.from_user.id, f"Вот ссылка для вступления в группу:\n{NEW_GROUP_LINK}")
 
 @dp.message(Form.screenshot)
 async def no_photo(message: types.Message):
     await message.answer("⚠️ Пожалуйста, отправь фото из профиля CPM.")
+
 
 # ----------------------------
 # CALLBACK — Админ (Одобрить/Отклонить)
@@ -175,8 +170,9 @@ async def reject(callback: types.CallbackQuery):
         reply_markup=keyboard
     )
 
+
 # ----------------------------
-# Проверка, является ли пользователь админом
+# Проверка админа
 # ----------------------------
 async def is_admin(user_id: int):
     try:
@@ -199,7 +195,7 @@ async def add_group(callback: types.CallbackQuery):
         await bot.send_message(user_id, f"✅ Ты добавлен в группу! Вот ссылка:\n{NEW_GROUP_LINK}")
         await callback.answer("✅ Ссылка отправлена пользователю", show_alert=True)
     except:
-        await callback.answer("⚠️ Не удалось отправить пользователю сообщение. Возможно, он удалил бота.", show_alert=True)
+        await callback.answer("⚠️ Не удалось отправить пользователю сообщение.", show_alert=True)
 
 @dp.callback_query(F.data.startswith("kick:"))
 async def kick_user(callback: types.CallbackQuery):
@@ -228,6 +224,7 @@ async def ban_user(callback: types.CallbackQuery):
     except Exception as e:
         await callback.answer(f"⚠️ Не удалось заблокировать пользователя: {e}", show_alert=True)
 
+
 # ----------------------------
 # Группа ожидания
 # ----------------------------
@@ -242,12 +239,15 @@ async def no_join(callback: types.CallbackQuery):
     await callback.message.edit_reply_markup()
     await bot.send_message(callback.from_user.id, "😌 Хорошо! Если что — всегда можешь написать позже ☘️")
 
+
 # ----------------------------
 # Автоудаление сообщения, если пользователь выходит из группы
 # ----------------------------
 @dp.chat_member()
 async def member_update(event: ChatMemberUpdated):
     user_id = event.from_user.id
+
+    # Если пользователь вышел из группы, удаляем сообщение
     if event.old_chat_member.is_member() and not event.new_chat_member.is_member():
         msg_id = messages_in_group.get(user_id)
         if msg_id:
@@ -256,6 +256,30 @@ async def member_update(event: ChatMemberUpdated):
                 del messages_in_group[user_id]
             except:
                 pass
+
+    # Если пользователь вступил в группу, отправляем сообщение о нём
+    if not event.old_chat_member.is_member() and event.new_chat_member.is_member():
+        data = stored_applications.get(user_id)
+        if not data:
+            return
+
+        group_text = (
+            "📌 Новая информация об участнике:\n\n"
+            f"🆔 Игровой ID: {data['game_id']}\n"
+            f"🎮 Игровой ник: {data['nickname']}\n"
+            f"🔗 Username: @{data['username']}"
+        )
+        group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Добавить в группу", callback_data=f"addgroup:{user_id}")],
+            [
+                InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}"),
+                InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")
+            ]
+        ])
+        msg = await bot.send_message(GROUP_CHAT_ID, group_text, message_thread_id=TOPIC_THREAD_ID, reply_markup=group_keyboard)
+        messages_in_group[user_id] = msg.message_id
+        del stored_applications[user_id]
+
 
 # ----------------------------
 # Render server + polling
