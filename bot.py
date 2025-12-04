@@ -86,6 +86,7 @@ async def finish_form(message: types.Message, state: FSMContext):
 
     await message.answer("☘️ Твоя заявка отправлена и сейчас находится на рассмотрении. 🕒")
 
+    # Убираем кнопку "Добавить в клан" и "Заблокировать"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve:{message.from_user.id}"),
@@ -106,24 +107,8 @@ async def finish_form(message: types.Message, state: FSMContext):
                 f"🕒 Время: {now}"
             )
 
-            # ====== Отправка информации в группу ожидания ======
-            group_chat_id = 3156012968  # Это ID твоей группы
-            thread_id = 20  # ID темы (обсуждения)
-
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [
-                    InlineKeyboardButton(text="Удалить", callback_data=f"remove_user:{message.from_user.id}"),
-                    InlineKeyboardButton(text="Заблокировать", callback_data=f"block_user:{message.from_user.id}"),
-                    InlineKeyboardButton(text="Добавить в клан", callback_data=f"add_to_clan:{message.from_user.id}")
-                ]
-            ])
-
-            await bot.send_message(
-                group_chat_id,
-                text,
-                reply_markup=keyboard,
-                thread_id=thread_id  # Отправка в нужную тему
-            )
+            # Здесь больше нет отправки информации в группу ожидания
+            # Убираем отправку данных в группу
 
         except Exception as e:
             print(f"Ошибка при отправке админу: {e}")
