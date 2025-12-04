@@ -30,20 +30,6 @@ class Form(StatesGroup):
     game_id = State()
     screenshot = State()
 
-# ====== Веб сервер для Render ======
-async def handle(request):
-    return web.Response(text="Bot is running 🚀")
-
-async def start_web():
-    app = web.Application()
-    app.router.add_get("/", handle)
-    port = int(os.getenv("PORT", 8000))
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    print(f"🌐 Web server running on port {port}")
-
 # ====== Хэндлеры бота ======
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
@@ -200,7 +186,6 @@ async def no_join(callback: types.CallbackQuery):
 
 # ====== Запуск ======
 async def main():
-    asyncio.create_task(start_web())  # запускаем web-сервер параллельно
     print("🤖 Бот запущен и работает 24/7")
     await dp.start_polling(bot)
 
