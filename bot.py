@@ -109,9 +109,7 @@ async def finish(message: types.Message, state: FSMContext):
 
     await message.answer("☘️ Твоя заявка отправлена и находится на рассмотрении. 🕒")
 
-    # ----------------------------
     # Отправка заявки администратору
-    # ----------------------------
     now = datetime.now().strftime("%d.%m.%Y, %H:%M")
     admin_text = (
         "📥 Новая заявка в клан XARIZMA!\n\n"
@@ -178,7 +176,6 @@ async def reject(callback: types.CallbackQuery):
 async def join_wait(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
-
     await bot.send_message(user_id, f"🕓 Отлично! Вот ссылка на группу ожидания:\n{WAIT_GROUP_LINK}")
     await callback.answer("✅ Ссылка на группу ожидания отправлена", show_alert=True)
 
@@ -201,18 +198,6 @@ async def is_admin(user_id: int):
 # ----------------------------
 # CALLBACK — Кнопки в ветке (только для админов)
 # ----------------------------
-@dp.callback_query(F.data.startswith("addgroup:"))
-async def add_group(callback: types.CallbackQuery):
-    if not await is_admin(callback.from_user.id):
-        await callback.answer("❌ Только админы могут использовать эту кнопку.", show_alert=True)
-        return
-    user_id = int(callback.data.split(":")[1])
-    try:
-        await bot.send_message(user_id, f"✅ Ты добавлен в группу! Вот ссылка:\n{NEW_GROUP_LINK}")
-        await callback.answer("✅ Ссылка отправлена пользователю", show_alert=True)
-    except:
-        await callback.answer("⚠️ Не удалось отправить пользователю сообщение.", show_alert=True)
-
 @dp.callback_query(F.data.startswith("kick:"))
 async def kick_user(callback: types.CallbackQuery):
     if not await is_admin(callback.from_user.id):
@@ -239,36 +224,32 @@ async def ban_user(callback: types.CallbackQuery):
         await callback.answer(f"⚠️ Не удалось заблокировать пользователя: {e}", show_alert=True)
 
 # ----------------------------
-# Автопубликация после вступления в группу ожидания и автоудаление при выходе
+# Автопубликация при вступлении и автоудаление при выходе
 # ----------------------------
 @dp.chat_member()
 async def member_update(event: ChatMemberUpdated):
     user_id = event.from_user.id
 
-    # Пользователь только что вступил в группу ожидания
+    # Пользователь вступил в группу
     if (not event.old_chat_member.is_member() and event.new_chat_member.is_member()):
         data = stored_applications.get(user_id)
         if data:
-            # Публикуем информацию в ветку
             group_text = (
                 "📌 Новая информация об участнике:\n\n"
                 f"🆔 Игровой ID: {data['game_id']}\n"
                 f"🎮 Игровой ник: {data['nickname']}\n"
                 f"🔗 Username: @{data['username']}"
             )
+            # Две кнопки: удалить и заблокировать
             group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="➕ Добавить в группу", callback_data=f"addgroup:{user_id}")],
-                [
-                    InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}"),
-                    InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")
-                ]
+                [InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}")],
+                [InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")]
             ])
             msg = await bot.send_message(GROUP_CHAT_ID, group_text, message_thread_id=TOPIC_THREAD_ID, reply_markup=group_keyboard)
             messages_in_group[user_id] = msg.message_id
-
             del stored_applications[user_id]
 
-    # Автоудаление сообщений если пользователь вышел
+    # Автоудаление сообщений, если пользователь вышел
     elif event.old_chat_member.is_member() and not event.new_chat_member.is_member():
         msg_id = messages_in_group.get(user_id)
         if msg_id:
