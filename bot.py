@@ -1,6 +1,5 @@
 import os
 import asyncio
-import logging
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
@@ -8,10 +7,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
     ReplyKeyboardMarkup, KeyboardButton,
-    InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated
+    InlineKeyboardMarkup, InlineKeyboardButton
 )
 from aiohttp import web
-from datetime import datetime
 
 # ----------------------------
 # НАСТРОЙКИ
@@ -19,19 +17,10 @@ from datetime import datetime
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-GROUP_CHAT_ID = -1003156012968  # ID группы ожидания
-TOPIC_THREAD_ID = 20  # ID темы
-
 WAIT_GROUP_LINK = "https://t.me/+S8yADtnHIRhiOGNi"  # Ссылка на группу ожидания
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-
-# ----------------------------
-# Словари для хранения состояния
-# ----------------------------
-messages_in_group = {}          # message_id сообщений в ветке
-stored_applications = {}        # данные анкеты до публикации в ветку
 
 # ----------------------------
 # FSM
@@ -97,18 +86,6 @@ async def finish(message: types.Message, state: FSMContext):
     photo_id = message.photo[-1].file_id
     await state.clear()
 
-    # Сохраняем данные анкеты для последующей обработки
-    stored_applications[message.from_user.id] = {
-        "age": data["age"],
-        "nickname": data["nickname"],
-        "game_id": data["game_id"],
-        "username": message.from_user.username,
-        "full_name": message.from_user.full_name,
-        "photo_id": photo_id
-    }
-
-    await message.answer("☘️ Твоя заявка отправлена и находится на рассмотрении. 🕒")
-
     # Отправка заявки администратору
     now = datetime.now().strftime("%d.%m.%Y, %H:%M")
     admin_text = (
@@ -163,54 +140,24 @@ async def join_wait(callback: types.CallbackQuery):
     # Отправляем ссылку на группу ожидания
     await bot.send_message(user_id, f"🕓 Отлично! Вот ссылка на группу ожидания:\n{WAIT_GROUP_LINK}")
 
-    # Публикуем информацию о пользователе в группе после вступления
-    data = stored_applications.get(user_id)
-    if data:
-        group_text = (
-            "📌 Новая информация об участнике:\n\n"
-            f"🆔 Игровой ID: {data['game_id']}\n"
-            f"🎮 Игровой ник: {data['nickname']}\n"
-            f"🔗 Username: @{data['username']}"
-        )
+    await callback.answer("✅ Ссылка на группу ожидания отправлена", show_alert=True)
 
-        # Добавляем кнопки для удаления и блокировки
-        group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}")],
-            [InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")]
-        ])
+# ----------------------------
+# Render server + polling
+# ----------------------------
+async def dummy(request):
+    return web.Response(text="ok")
 
-        try:
-            # Отправляем сообщение в группу ожидания в тему
-            msg = await bot.send_message(GROUP_CHAT_ID, group_text, message_thread_id=TOPIC_THREAD_ID, reply_markup=group_keyboard)
-            messages_in_group[user_id] = msg.message_id  # Сохраняем ID сообщения для удаления, если нужно
-            del stored_applications[user_id]  # Удаляем данные после публикации
-        except Exception as e:
-            logging.error(f"Error sending message: {e}")
+async def start_polling_and_server():
+    polling_task = asyncio.create_task(dp.start_polling(bot))
+    app = web.Application()
+    app.router.add_get("/", dummy)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080)))
+    await site.start()
+    await polling_task
 
-        # Подтверждаем отправку ссылки на группу ожидания
-        await callback.answer("✅ Ссылка на группу ожидания отправлена", show_alert=True)
-
-@dp.chat_member()
-async def member_update(event: ChatMemberUpdated):
-    user_id = event.from_user.id
-
-    # Пользователь вступил в группу
-    if not event.old_chat_member.is_member() and event.new_chat_member.is_member():
-        data = stored_applications.get(user_id)
-        if data:
-            group_text = (
-                "📌 Новая информация об участнике:\n\n"
-                f"🆔 Игровой ID: {data['game_id']}\n"
-                f"🎮 Игровой ник: {data['nickname']}\n"
-                f"🔗 Username: @{data['username']}"
-            )
-
-            # Добавляем кнопки для удаления и блокировки
-            group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}")],
-                [InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")]
-            ])
-
-            try:
-                # Отправляем сообщение в группу ожидания в тему
-                msg = await
+if __name__ == "__main__":
+    print("🤖 Бот запущен (Render + polling)")
+    asyncio.run(start_polling_and_server())
