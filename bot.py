@@ -94,41 +94,45 @@ async def ask_for_photo(message: types.Message):
 
 @dp.message(Form.screenshot, lambda message: message.photo)
 async def finish(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    photo_id = message.photo[-1].file_id  # Получаем последнее фото (наибольшее качество)
-
-    # Отправка сообщения пользователю, что заявка обрабатывается
-    await message.answer("📝 Твоя заявка обрабатывается, пожалуйста, подождите...")
-
-    # Отправка заявки админу
-    now = datetime.now().strftime("%d.%m.%Y, %H:%M")
-    admin_text = (
-        "📥 Новая заявка в клан XARIZMA!\n\n"
-        f"👤 Имя: {message.from_user.full_name}\n"
-        f"🔗 Username: @{message.from_user.username}\n"
-        f"🆔 Telegram ID: {message.from_user.id}\n\n"
-        f"🔞 Возраст: {data['age']}\n"
-        f"🎮 Игровой ник: {data['nickname']}\n"
-        f"💻 Игровой ID: {data['game_id']}\n"
-        f"🕒 Время: {now}"
-    )
-    keyboard_admin = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve:{message.from_user.id}"),
-            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject:{message.from_user.id}")
-        ]
-    ])
-    
     try:
-        # Отправляем заявку админу
-        await bot.send_photo(ADMIN_ID, photo_id, caption=admin_text, reply_markup=keyboard_admin)
-    except Exception as e:
-        await message.answer(f"❌ Произошла ошибка при отправке заявки админу: {str(e)}")
-        await state.clear()
-        return
+        data = await state.get_data()
+        photo_id = message.photo[-1].file_id  # Получаем последнее фото (наибольшее качество)
 
-    # Очистить состояние после завершения
-    await state.clear()
+        # Отправка сообщения пользователю, что заявка обрабатывается
+        await message.answer("📝 Твоя заявка обрабатывается, пожалуйста, подождите...")
+
+        # Отправка заявки админу
+        now = datetime.now().strftime("%d.%m.%Y, %H:%M")
+        admin_text = (
+            "📥 Новая заявка в клан XARIZMA!\n\n"
+            f"👤 Имя: {message.from_user.full_name}\n"
+            f"🔗 Username: @{message.from_user.username}\n"
+            f"🆔 Telegram ID: {message.from_user.id}\n\n"
+            f"🔞 Возраст: {data['age']}\n"
+            f"🎮 Игровой ник: {data['nickname']}\n"
+            f"💻 Игровой ID: {data['game_id']}\n"
+            f"🕒 Время: {now}"
+        )
+        keyboard_admin = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve:{message.from_user.id}"),
+                InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject:{message.from_user.id}")
+            ]
+        ])
+
+        try:
+            # Отправляем заявку админу
+            await bot.send_photo(ADMIN_ID, photo_id, caption=admin_text, reply_markup=keyboard_admin)
+        except Exception as e:
+            await message.answer(f"❌ Произошла ошибка при отправке заявки админу: {str(e)}")
+            await state.clear()
+            return
+
+        # Очистить состояние после завершения
+        await state.clear()
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {str(e)}")
+        await state.clear()
 
 @dp.message(Form.screenshot)
 async def no_photo(message: types.Message):
