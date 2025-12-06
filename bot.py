@@ -9,6 +9,7 @@ from aiogram.types import (
     ReplyKeyboardMarkup, KeyboardButton,
     InlineKeyboardMarkup, InlineKeyboardButton
 )
+from datetime import datetime
 from aiohttp import web
 
 # ----------------------------
@@ -23,7 +24,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 # ----------------------------
-# FSM
+# FSM (состояния анкеты)
 # ----------------------------
 class Form(StatesGroup):
     age = State()
