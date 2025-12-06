@@ -1,5 +1,6 @@
 import os
 import asyncio
+import logging
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
@@ -18,8 +19,8 @@ from datetime import datetime
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-GROUP_CHAT_ID = -1003156012968  # ID чата группы ожидания
-TOPIC_THREAD_ID = 20  # ID темы в группе
+GROUP_CHAT_ID = -1003156012968  # ID группы ожидания
+TOPIC_THREAD_ID = 20  # ID темы (треда) в группе
 
 WAIT_GROUP_LINK = "https://t.me/+S8yADtnHIRhiOGNi"  # Ссылка на группу ожидания
 
@@ -31,6 +32,11 @@ dp = Dispatcher(storage=MemoryStorage())
 # ----------------------------
 messages_in_group = {}          # message_id сообщений в ветке
 stored_applications = {}        # данные анкеты до публикации в ветку
+
+# ----------------------------
+# Настройка логирования
+# ----------------------------
+logging.basicConfig(level=logging.DEBUG)  # Для вывода логов
 
 # ----------------------------
 # FSM
@@ -177,13 +183,14 @@ async def join_wait(callback: types.CallbackQuery):
             [InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}")],
             [InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")]
         ])
+        
         try:
             # Отправляем сообщение в группу ожидания в тему
             msg = await bot.send_message(GROUP_CHAT_ID, group_text, message_thread_id=TOPIC_THREAD_ID, reply_markup=group_keyboard)
             messages_in_group[user_id] = msg.message_id  # Сохраняем ID сообщения для удаления, если нужно
             del stored_applications[user_id]  # Удаляем данные после публикации
         except Exception as e:
-            print(f"Error sending message: {e}")
+            logging.error(f"Error sending message: {e}")
 
     # Подтверждаем отправку ссылки на группу ожидания
     await callback.answer("✅ Ссылка на группу ожидания отправлена", show_alert=True)
@@ -202,11 +209,6 @@ async def member_update(event: ChatMemberUpdated):
                 f"🎮 Игровой ник: {data['nickname']}\n"
                 f"🔗 Username: @{data['username']}"
             )
-            # Кнопки для удаления и блокировки
+            # Добавляем кнопки для удаления и блокировки
             group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}")],
-                [InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")]
-            ])
-            try:
-                # Отправляем сообщение в группу ожидания в тему
-                msg = await bot.send_message(GROUP_CHAT_ID, group_text, message_thread_id=TOPIC_THREAD_ID, reply_markup=group_keyboard)
+                [InlineKeyboardButton(text="
