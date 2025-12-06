@@ -2,7 +2,7 @@ import os
 import asyncio
 from datetime import datetime
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command, Text
+from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -46,12 +46,12 @@ async def cmd_start(message: types.Message, state: FSMContext):
 # ----------------------------
 # АНКЕТА
 # ----------------------------
-@dp.message(Text("✅ Да"))
+@dp.message(lambda message: message.text == "✅ Да")
 async def ask_age(message: types.Message, state: FSMContext):
     await state.set_state(Form.age)
     await message.answer("🔞 Сколько тебе лет?", reply_markup=types.ReplyKeyboardRemove())
 
-@dp.message(Text("❌ Нет"))
+@dp.message(lambda message: message.text == "❌ Нет")
 async def cancel(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer(
@@ -92,7 +92,7 @@ async def ask_for_photo(message: types.Message):
         await message.answer("⚠️ Пожалуйста, отправь фото из профиля CPM.")
         return
 
-@dp.message(Form.screenshot, Text.photo)
+@dp.message(Form.screenshot, lambda message: message.photo)
 async def finish(message: types.Message, state: FSMContext):
     data = await state.get_data()
     photo_id = message.photo[-1].file_id  # Получаем последнее фото (наибольшее качество)
@@ -137,7 +137,7 @@ async def no_photo(message: types.Message):
 # ----------------------------
 # CALLBACK — Админ (Отклонить)
 # ----------------------------
-@dp.callback_query(Text.startswith("reject:"))
+@dp.callback_query(lambda callback: callback.data.startswith("reject:"))
 async def reject(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
@@ -156,7 +156,7 @@ async def reject(callback: types.CallbackQuery):
         reply_markup=keyboard
     )
 
-@dp.callback_query(Text.startswith("join_wait:"))
+@dp.callback_query(lambda callback: callback.data.startswith("join_wait:"))
 async def join_wait(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
