@@ -1,15 +1,14 @@
 import os
 import asyncio
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import Command
+import logging
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command, Text
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import (
-    ReplyKeyboardMarkup, KeyboardButton,
-    InlineKeyboardMarkup, InlineKeyboardButton
-)
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
+from aiohttp import web
 
 # ----------------------------
 # НАСТРОЙКИ
@@ -48,12 +47,12 @@ async def cmd_start(message: types.Message, state: FSMContext):
 # ----------------------------
 # АНКЕТА
 # ----------------------------
-@dp.message(F.text == "✅ Да")
+@dp.message(Text("✅ Да"))
 async def ask_age(message: types.Message, state: FSMContext):
     await state.set_state(Form.age)
     await message.answer("🔞 Сколько тебе лет?", reply_markup=types.ReplyKeyboardRemove())
 
-@dp.message(F.text == "❌ Нет")
+@dp.message(Text("❌ Нет"))
 async def cancel(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer(
@@ -63,7 +62,12 @@ async def cancel(message: types.Message, state: FSMContext):
 
 @dp.message(Form.age)
 async def ask_nickname(message: types.Message, state: FSMContext):
-    await state.update_data(age=message.text)
+    age = message.text
+    # Проверка возраста
+    if not age.isdigit() or int(age) < 12:  # Минимальный возраст 12 лет
+        await message.answer("❌ Неверный возраст. Пожалуйста, укажи свой возраст числом.")
+        return
+    await state.update_data(age=age)
     await state.set_state(Form.nickname)
     await message.answer("🎮 Напиши свой игровой ник.")
 
@@ -79,11 +83,31 @@ async def ask_screenshot(message: types.Message, state: FSMContext):
     await state.set_state(Form.screenshot)
     await message.answer("📸 Отлично! Теперь отправь скриншот из своего профиля CPM 👇🏻")
 
+# ----------------------------
+# ПРОВЕРКА, ЧТО ОТПРАВЛЕНО ИМЕННО ФОТО
+# ----------------------------
+@dp.message(Form.screenshot)
+async def ask_for_photo(message: types.Message):
+    # Если отправлено не фото, просим отправить фото
+    if not message.photo:
+        await message.answer("⚠️ Пожалуйста, отправь фото из профиля CPM.")
+        return
+
 @dp.message(Form.screenshot, F.photo)
 async def finish(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    photo_id = message.photo[-1].file_id
-    await state.clear()
+    photo_id = message.photo[-1].file_id  # Получаем последнее фото (наибольшее качество)
+
+    # Делаем загрузку фото (если необходимо)
+    try:
+        photo = await message.photo[-1].download()  # Ожидаем загрузку фотографии на сервер
+    except Exception as e:
+        await message.answer(f"❌ Произошла ошибка при загрузке фото: {str(e)}")
+        await state.clear()
+        return
+
+    # Отправка сообщения пользователю, что заявка обрабатывается
+    await message.answer("📝 Твоя заявка обрабатывается, пожалуйста, подождите...")
 
     # Отправка заявки администратору
     now = datetime.now().strftime("%d.%m.%Y, %H:%M")
@@ -103,10 +127,15 @@ async def finish(message: types.Message, state: FSMContext):
             InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject:{message.from_user.id}")
         ]
     ])
-    await bot.send_photo(ADMIN_ID, photo_id, caption=admin_text, reply_markup=keyboard_admin)
+    try:
+        await bot.send_photo(ADMIN_ID, photo_id, caption=admin_text, reply_markup=keyboard_admin)
+    except Exception as e:
+        await message.answer(f"❌ Произошла ошибка при отправке заявки админу: {str(e)}")
+        await state.clear()
+        return
 
-    # Уведомление о том, что заявка обрабатывается
-    await message.answer("🚀 Ваша заявка обрабатывается, пожалуйста, подождите...")
+    # Очистить состояние после завершения
+    await state.clear()
 
 @dp.message(Form.screenshot)
 async def no_photo(message: types.Message):
@@ -145,11 +174,33 @@ async def join_wait(callback: types.CallbackQuery):
     await callback.answer("✅ Ссылка на группу ожидания отправлена", show_alert=True)
 
 # ----------------------------
-# Основной сервер с Polling
+# Запуск бота через polling внутри web service
 # ----------------------------
-async def main():
-    print("Бот запущен через polling...")
+async def on_start(request):
+    return web.Response(text="Bot is running")
+
+async def on_shutdown(app):
+    await bot.close()
+
+# Запуск через polling
+async def start_polling():
+    print("Бот запущен с использованием Polling")
     await dp.start_polling(bot)
 
+# Настроим веб-сервер
+async def create_app():
+    app = web.Application()
+    app.router.add_get('/', on_start)
+    app.on_shutdown.append(on_shutdown)
+    return app
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Создаем и запускаем веб-приложение
+    app = asyncio.run(create_app())
+    
+    # Запускаем polling в отдельном процессе
+    loop = asyncio.get_event_loop()
+    loop.create_task(start_polling())
+
+    # Запуск web-сервера
+    web.run_app(app, host='0.0.0.0', port=8080)
