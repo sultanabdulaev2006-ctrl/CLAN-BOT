@@ -20,7 +20,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
 GROUP_CHAT_ID = -1003156012968  # ID группы ожидания
-TOPIC_THREAD_ID = 20  # ID темы (треда) в группе
+TOPIC_THREAD_ID = 20  # ID темы
 
 WAIT_GROUP_LINK = "https://t.me/+S8yADtnHIRhiOGNi"  # Ссылка на группу ожидания
 
@@ -32,11 +32,6 @@ dp = Dispatcher(storage=MemoryStorage())
 # ----------------------------
 messages_in_group = {}          # message_id сообщений в ветке
 stored_applications = {}        # данные анкеты до публикации в ветку
-
-# ----------------------------
-# Настройка логирования
-# ----------------------------
-logging.basicConfig(level=logging.DEBUG)  # Для вывода логов
 
 # ----------------------------
 # FSM
@@ -169,7 +164,6 @@ async def join_wait(callback: types.CallbackQuery):
     await bot.send_message(user_id, f"🕓 Отлично! Вот ссылка на группу ожидания:\n{WAIT_GROUP_LINK}")
 
     # Публикуем информацию о пользователе в группе после вступления
-    # Используем данные из stored_applications
     data = stored_applications.get(user_id)
     if data:
         group_text = (
@@ -178,12 +172,13 @@ async def join_wait(callback: types.CallbackQuery):
             f"🎮 Игровой ник: {data['nickname']}\n"
             f"🔗 Username: @{data['username']}"
         )
+
         # Добавляем кнопки для удаления и блокировки
         group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}")],
             [InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")]
         ])
-        
+
         try:
             # Отправляем сообщение в группу ожидания в тему
             msg = await bot.send_message(GROUP_CHAT_ID, group_text, message_thread_id=TOPIC_THREAD_ID, reply_markup=group_keyboard)
@@ -192,8 +187,8 @@ async def join_wait(callback: types.CallbackQuery):
         except Exception as e:
             logging.error(f"Error sending message: {e}")
 
-    # Подтверждаем отправку ссылки на группу ожидания
-    await callback.answer("✅ Ссылка на группу ожидания отправлена", show_alert=True)
+        # Подтверждаем отправку ссылки на группу ожидания
+        await callback.answer("✅ Ссылка на группу ожидания отправлена", show_alert=True)
 
 @dp.chat_member()
 async def member_update(event: ChatMemberUpdated):
@@ -209,6 +204,13 @@ async def member_update(event: ChatMemberUpdated):
                 f"🎮 Игровой ник: {data['nickname']}\n"
                 f"🔗 Username: @{data['username']}"
             )
+
             # Добавляем кнопки для удаления и блокировки
             group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="
+                [InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}")],
+                [InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")]
+            ])
+
+            try:
+                # Отправляем сообщение в группу ожидания в тему
+                msg = await
