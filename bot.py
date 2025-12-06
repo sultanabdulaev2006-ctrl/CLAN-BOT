@@ -1,6 +1,6 @@
 import os
 import asyncio
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
@@ -16,7 +16,6 @@ from datetime import datetime
 # ----------------------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
-
 WAIT_GROUP_LINK = "https://t.me/+S8yADtnHIRhiOGNi"  # Ссылка на группу ожидания
 
 bot = Bot(token=BOT_TOKEN)
@@ -106,6 +105,9 @@ async def finish(message: types.Message, state: FSMContext):
     ])
     await bot.send_photo(ADMIN_ID, photo_id, caption=admin_text, reply_markup=keyboard_admin)
 
+    # Уведомление о том, что заявка обрабатывается
+    await message.answer("🚀 Ваша заявка обрабатывается, пожалуйста, подождите...")
+
 @dp.message(Form.screenshot)
 async def no_photo(message: types.Message):
     await message.answer("⚠️ Пожалуйста, отправь фото из профиля CPM.")
@@ -143,12 +145,11 @@ async def join_wait(callback: types.CallbackQuery):
     await callback.answer("✅ Ссылка на группу ожидания отправлена", show_alert=True)
 
 # ----------------------------
-# Запуск бота с polling
+# Основной сервер с Polling
 # ----------------------------
-async def start_polling():
-    # Стартуем polling (это будет работать как единственный метод получения обновлений)
+async def main():
+    print("Бот запущен через polling...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    print("🤖 Бот запущен (Polling mode)")
-    asyncio.run(start_polling())
+    asyncio.run(main())
