@@ -137,10 +137,12 @@ async def reject(callback: types.CallbackQuery):
         ]
     ])
 
+    # ОБНОВЛЁННЫЙ ТЕКСТ
     await bot.send_message(
         user_id,
         "❌ Твоя заявка отклонена.\n"
-        "Свободных мест нет. Хочешь ссылку на группу ожидания?",
+        "Свободных мест нет, но можешь войти в группу ожидания.\n"
+        "Отправить ссылку?",
         reply_markup=keyboard
     )
 
