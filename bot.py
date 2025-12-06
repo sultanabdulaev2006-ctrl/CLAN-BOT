@@ -1,13 +1,12 @@
 import os
 import asyncio
-import logging
+from datetime import datetime
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, Text
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
-from datetime import datetime
 from aiohttp import web
 
 # ----------------------------
@@ -21,7 +20,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 # ----------------------------
-# FSM
+# FSM (Состояния)
 # ----------------------------
 class Form(StatesGroup):
     age = State()
@@ -93,23 +92,15 @@ async def ask_for_photo(message: types.Message):
         await message.answer("⚠️ Пожалуйста, отправь фото из профиля CPM.")
         return
 
-@dp.message(Form.screenshot, F.photo)
+@dp.message(Form.screenshot, Text.photo)
 async def finish(message: types.Message, state: FSMContext):
     data = await state.get_data()
     photo_id = message.photo[-1].file_id  # Получаем последнее фото (наибольшее качество)
 
-    # Делаем загрузку фото (если необходимо)
-    try:
-        photo = await message.photo[-1].download()  # Ожидаем загрузку фотографии на сервер
-    except Exception as e:
-        await message.answer(f"❌ Произошла ошибка при загрузке фото: {str(e)}")
-        await state.clear()
-        return
-
     # Отправка сообщения пользователю, что заявка обрабатывается
     await message.answer("📝 Твоя заявка обрабатывается, пожалуйста, подождите...")
 
-    # Отправка заявки администратору
+    # Отправка заявки админу
     now = datetime.now().strftime("%d.%m.%Y, %H:%M")
     admin_text = (
         "📥 Новая заявка в клан XARIZMA!\n\n"
@@ -127,7 +118,9 @@ async def finish(message: types.Message, state: FSMContext):
             InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject:{message.from_user.id}")
         ]
     ])
+    
     try:
+        # Отправляем заявку админу
         await bot.send_photo(ADMIN_ID, photo_id, caption=admin_text, reply_markup=keyboard_admin)
     except Exception as e:
         await message.answer(f"❌ Произошла ошибка при отправке заявки админу: {str(e)}")
@@ -144,7 +137,7 @@ async def no_photo(message: types.Message):
 # ----------------------------
 # CALLBACK — Админ (Отклонить)
 # ----------------------------
-@dp.callback_query(F.data.startswith("reject:"))
+@dp.callback_query(Text.startswith("reject:"))
 async def reject(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
@@ -163,7 +156,7 @@ async def reject(callback: types.CallbackQuery):
         reply_markup=keyboard
     )
 
-@dp.callback_query(F.data.startswith("join_wait:"))
+@dp.callback_query(Text.startswith("join_wait:"))
 async def join_wait(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
