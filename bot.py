@@ -1,6 +1,8 @@
 import os
 import asyncio
 from datetime import datetime
+from aiohttp import web
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
@@ -10,10 +12,9 @@ from aiogram.types import (
     ReplyKeyboardMarkup, KeyboardButton,
     InlineKeyboardMarkup, InlineKeyboardButton
 )
-from aiohttp import web
 
 # ----------------------------
-# НАСТРОЙКИ
+# CONFIG
 # ----------------------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
@@ -21,7 +22,6 @@ WAIT_GROUP_LINK = "https://t.me/+S8yADtnHIRhiOGNi"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-
 
 # ----------------------------
 # FSM
@@ -73,7 +73,7 @@ async def ask_nickname(message: types.Message, state: FSMContext):
     age = message.text
 
     if not age.isdigit() or int(age) < 12:
-        await message.answer("❌ Неверный возраст. Пожалуйста, укажи возраст числом.")
+        await message.answer("❌ Неверный возраст. Укажи возраст числом.")
         return
 
     await state.update_data(age=age)
@@ -88,18 +88,15 @@ async def ask_game_id(message: types.Message, state: FSMContext):
     await message.answer("💻✍🏻 Отправь свой игровой ID из CPM.")
 
 
-# ----------------------------
-# ПОСЛЕ ПОЛУЧЕНИЯ ID — ОТПРАВЛЯЕМ "ЗАЯВКА ОБРАБАТЫВАЕТСЯ"
-# ----------------------------
 @dp.message(Form.game_id)
 async def finish_form(message: types.Message, state: FSMContext):
     await state.update_data(game_id=message.text)
     data = await state.get_data()
 
-    # ⬇⬇⬇ Вот это сообщение ПОСЛЕ получения ID
+    # Сообщение пользователю
     await message.answer("📝 Твоя заявка обрабатывается, пожалуйста, подождите...")
 
-    # Данные админу
+    # Формируем текст админу
     now = datetime.now().strftime("%d.%m.%Y, %H:%M")
     admin_text = (
         "📥 Новая заявка в клан XARIZMA!\n\n"
@@ -107,8 +104,8 @@ async def finish_form(message: types.Message, state: FSMContext):
         f"🔗 Username: @{message.from_user.username}\n"
         f"🆔 Telegram ID: {message.from_user.id}\n\n"
         f"🔞 Возраст: {data['age']}\n"
-        f"🎮 Игровой ник: {data['nickname']}\n"
-        f"🆔 Игровой ID: {data['game_id']}\n"
+        f"🎮 Ник: {data['nickname']}\n"
+        f"🆔 ID: {data['game_id']}\n"
         f"🕒 Время: {now}"
     )
 
@@ -119,15 +116,14 @@ async def finish_form(message: types.Message, state: FSMContext):
         ]
     ])
 
-    # Отправить админу
+    # Отправляем админу
     await bot.send_message(ADMIN_ID, admin_text, reply_markup=keyboard_admin)
 
-    # Очистить состояние
     await state.clear()
 
 
 # ----------------------------
-# CALLBACK — админ отклоняет
+# CALLBACK — Admin Reject
 # ----------------------------
 @dp.callback_query(lambda c: c.data.startswith("reject:"))
 async def reject(callback: types.CallbackQuery):
@@ -144,8 +140,7 @@ async def reject(callback: types.CallbackQuery):
     await bot.send_message(
         user_id,
         "❌ Твоя заявка отклонена.\n"
-        "Свободных мест нет, но можешь войти в группу ожидания.\n"
-        "Отправить ссылку?",
+        "Свободных мест нет. Хочешь ссылку на группу ожидания?",
         reply_markup=keyboard
     )
 
@@ -154,30 +149,33 @@ async def reject(callback: types.CallbackQuery):
 async def join_wait(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
-    await bot.send_message(user_id, f"🕓 Вот ссылка на группу ожидания:\n{WAIT_GROUP_LINK}")
-    await callback.answer("✅ Ссылка отправлена", show_alert=True)
+    await bot.send_message(user_id, f"🕓 Ссылка на группу ожидания:\n{WAIT_GROUP_LINK}")
+    await callback.answer("Ссылка отправлена!", show_alert=True)
 
 
 # ----------------------------
-# RENDER SERVER + POLLING
+# RENDER: Web Server + Polling
 # ----------------------------
-async def on_start(request):
-    return web.Response(text="Bot is running")
+async def handle_root(request):
+    return web.Response(text="Bot is running ✓")
 
 
-async def start_polling():
-    print("Бот запущен (Polling)")
+async def start_bot():
+    """Запуск Telegram polling"""
     await dp.start_polling(bot)
 
 
-async def create_app():
+async def init_app():
+    """Создание aiohttp приложения и запуск polling параллельно"""
     app = web.Application()
-    app.router.add_get('/', on_start)
+    app.router.add_get("/", handle_root)
+
+    # Запускаем polling как фоновую задачу
+    asyncio.create_task(start_bot())
+
     return app
 
 
 if __name__ == "__main__":
-    app = asyncio.run(create_app())
-    loop = asyncio.get_event_loop()
-    loop.create_task(start_polling())
-    web.run_app(app, host='0.0.0.0', port=8080)
+    # Запускаем aiohttp сервер (Render требует web-сервер)
+    web.run_app(init_app(), host="0.0.0.0", port=8080)
