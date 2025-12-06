@@ -18,11 +18,11 @@ from datetime import datetime
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-GROUP_CHAT_ID = -1003156012968
-TOPIC_THREAD_ID = 20  # id темы
+GROUP_CHAT_ID = -1003156012968  # ID чата группы
+TOPIC_THREAD_ID = 20  # ID темы в группе
 
-NEW_GROUP_LINK = "https://t.me/+moSa3x2Nbyo4NzBi"
-WAIT_GROUP_LINK = "https://t.me/+S8yADtnHIRhiOGNi"
+NEW_GROUP_LINK = "https://t.me/+moSa3x2Nbyo4NzBi"  # Ссылка на группу
+WAIT_GROUP_LINK = "https://t.me/+S8yADtnHIRhiOGNi"  # Ссылка на группу ожидания
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
@@ -136,26 +136,12 @@ async def no_photo(message: types.Message):
 # ----------------------------
 # CALLBACK — Админ (Одобрить/Отклонить)
 # ----------------------------
-@dp.callback_query(F.data.startswith("approve:"))
-async def approve(callback: types.CallbackQuery):
-    user_id = int(callback.data.split(":")[1])
-    await callback.message.edit_reply_markup()
-    data = stored_applications.get(user_id)
-    if not data:
-        await callback.answer("❌ Данные пользователя не найдены.", show_alert=True)
-        return
-
-    await bot.send_message(user_id,
-        "✅ Твоя заявка одобрена!\nДобро пожаловать в клан.\n"
-        f"Вот ссылка для вступления в группу:\n{NEW_GROUP_LINK}"
-    )
-    await callback.answer("✅ Пользователь получил ссылку на группу", show_alert=True)
-
 @dp.callback_query(F.data.startswith("reject:"))
 async def reject(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
 
+    # Отправляем ссылку на группу ожидания
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="✅ Да", callback_data=f"join_wait:{user_id}"),
@@ -169,51 +155,53 @@ async def reject(callback: types.CallbackQuery):
         reply_markup=keyboard
     )
 
-# ----------------------------
-# CALLBACK — Группа ожидания
-# ----------------------------
 @dp.callback_query(F.data.startswith("join_wait:"))
 async def join_wait(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
+
+    # Отправляем ссылку на группу ожидания
     await bot.send_message(user_id, f"🕓 Отлично! Вот ссылка на группу ожидания:\n{WAIT_GROUP_LINK}")
+
+    # Публикуем информацию о пользователе в группе после вступления
+    # Используем данные из stored_applications
+    data = stored_applications.get(user_id)
+    if data:
+        group_text = (
+            "📌 Новая информация об участнике:\n\n"
+            f"🆔 Игровой ID: {data['game_id']}\n"
+            f"🎮 Игровой ник: {data['nickname']}\n"
+            f"🔗 Username: @{data['username']}"
+        )
+        # Добавляем кнопки для удаления и блокировки
+        group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}")],
+            [InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")]
+        ])
+        try:
+            # Отправляем сообщение в группу ожидания в тему
+            msg = await bot.send_message(GROUP_CHAT_ID, group_text, message_thread_id=TOPIC_THREAD_ID, reply_markup=group_keyboard)
+            messages_in_group[user_id] = msg.message_id  # Сохраняем ID сообщения для удаления, если нужно
+            del stored_applications[user_id]  # Удаляем данные после публикации
+        except Exception as e:
+            print(f"Error sending message: {e}")
+
+    # Подтверждаем отправку ссылки на группу ожидания
     await callback.answer("✅ Ссылка на группу ожидания отправлена", show_alert=True)
 
-@dp.callback_query(F.data.startswith("no_join:"))
-async def no_join(callback: types.CallbackQuery):
-    user_id = int(callback.data.split(":")[1])
-    await callback.message.edit_reply_markup()
-    await bot.send_message(user_id, "😌 Хорошо! Если что — всегда можешь написать позже ☘️")
+@dp.chat_member()
+async def member_update(event: ChatMemberUpdated):
+    user_id = event.from_user.id
 
-# ----------------------------
-# Проверка админа
-# ----------------------------
-async def is_admin(user_id: int):
-    try:
-        member = await bot.get_chat_member(GROUP_CHAT_ID, user_id)
-        return member.status in ["administrator", "creator"]
-    except:
-        return False
-
-# ----------------------------
-# CALLBACK — Кнопки в ветке (только для админов)
-# ----------------------------
-@dp.callback_query(F.data.startswith("kick:"))
-async def kick_user(callback: types.CallbackQuery):
-    if not await is_admin(callback.from_user.id):
-        await callback.answer("❌ Только админы могут использовать эту кнопку.", show_alert=True)
-        return
-    user_id = int(callback.data.split(":")[1])
-    try:
-        await bot.ban_chat_member(GROUP_CHAT_ID, user_id)
-        await bot.unban_chat_member(GROUP_CHAT_ID, user_id)
-        await callback.answer("✅ Пользователь удалён из группы", show_alert=True)
-    except Exception as e:
-        await callback.answer(f"⚠️ Не удалось удалить пользователя: {e}", show_alert=True)
-
-@dp.callback_query(F.data.startswith("ban:"))
-async def ban_user(callback: types.CallbackQuery):
-    if not await is_admin(callback.from_user.id):
-        await callback.answer("❌ Только админы могут использовать эту кнопку.", show_alert=True)
-        return
-    user_id = int(callback.data.split(":
+    # Пользователь вступил в группу
+    if not event.old_chat_member.is_member() and event.new_chat_member.is_member():
+        data = stored_applications.get(user_id)
+        if data:
+            group_text = (
+                "📌 Новая информация об участнике:\n\n"
+                f"🆔 Игровой ID: {data['game_id']}\n"
+                f"🎮 Игровой ник: {data['nickname']}\n"
+                f"🔗 Username: @{data['username']}"
+            )
+            # Кнопки для удаления и блокировки
+            group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
