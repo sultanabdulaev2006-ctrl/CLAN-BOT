@@ -1,6 +1,6 @@
 import os
 import asyncio
-from aiogram import Bot, Dispatcher, types, F
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
@@ -10,7 +10,6 @@ from aiogram.types import (
     InlineKeyboardMarkup, InlineKeyboardButton
 )
 from datetime import datetime
-from aiohttp import web
 
 # ----------------------------
 # НАСТРОЙКИ
@@ -24,7 +23,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 # ----------------------------
-# FSM (состояния анкеты)
+# FSM
 # ----------------------------
 class Form(StatesGroup):
     age = State()
@@ -144,21 +143,12 @@ async def join_wait(callback: types.CallbackQuery):
     await callback.answer("✅ Ссылка на группу ожидания отправлена", show_alert=True)
 
 # ----------------------------
-# Render server + polling
+# Запуск бота с polling
 # ----------------------------
-async def dummy(request):
-    return web.Response(text="ok")
-
-async def start_polling_and_server():
-    polling_task = asyncio.create_task(dp.start_polling(bot))
-    app = web.Application()
-    app.router.add_get("/", dummy)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080)))
-    await site.start()
-    await polling_task
+async def start_polling():
+    # Стартуем polling (это будет работать как единственный метод получения обновлений)
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    print("🤖 Бот запущен (Render + polling)")
-    asyncio.run(start_polling_and_server())
+    print("🤖 Бот запущен (Polling mode)")
+    asyncio.run(start_polling())
