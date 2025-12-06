@@ -18,10 +18,9 @@ from datetime import datetime
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-GROUP_CHAT_ID = -1003156012968  # ID чата группы
+GROUP_CHAT_ID = -1003156012968  # ID чата группы ожидания
 TOPIC_THREAD_ID = 20  # ID темы в группе
 
-NEW_GROUP_LINK = "https://t.me/+moSa3x2Nbyo4NzBi"  # Ссылка на группу
 WAIT_GROUP_LINK = "https://t.me/+S8yADtnHIRhiOGNi"  # Ссылка на группу ожидания
 
 bot = Bot(token=BOT_TOKEN)
@@ -134,7 +133,7 @@ async def no_photo(message: types.Message):
     await message.answer("⚠️ Пожалуйста, отправь фото из профиля CPM.")
 
 # ----------------------------
-# CALLBACK — Админ (Одобрить/Отклонить)
+# CALLBACK — Админ (Отклонить)
 # ----------------------------
 @dp.callback_query(F.data.startswith("reject:"))
 async def reject(callback: types.CallbackQuery):
@@ -205,3 +204,9 @@ async def member_update(event: ChatMemberUpdated):
             )
             # Кнопки для удаления и блокировки
             group_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Удалить", callback_data=f"kick:{user_id}")],
+                [InlineKeyboardButton(text="⛔ Заблокировать", callback_data=f"ban:{user_id}")]
+            ])
+            try:
+                # Отправляем сообщение в группу ожидания в тему
+                msg = await bot.send_message(GROUP_CHAT_ID, group_text, message_thread_id=TOPIC_THREAD_ID, reply_markup=group_keyboard)
