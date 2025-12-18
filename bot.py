@@ -89,12 +89,11 @@ async def finish_form(message: types.Message, state: FSMContext):
     )
     keyboard_admin = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve:{message.from_user.id}"),
+            InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve:{message.from_user.id}:{data['nickname']}:{data['game_id']}"),
             InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject:{message.from_user.id}")
         ]
     ])
     await bot.send_message(ADMIN_ID, admin_text, reply_markup=keyboard_admin)
-    pending_users[message.from_user.id] = {"nickname": data['nickname'], "game_id": data['game_id']}
     await state.clear()
 
 @dp.callback_query(lambda c: c.data.startswith("reject:"))
@@ -124,34 +123,28 @@ async def join_wait(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda c: c.data.startswith("approve:"))
 async def approve(callback: types.CallbackQuery):
-    user_id = int(callback.data.split(":")[1])
+    parts = callback.data.split(":")
+    user_id = int(parts[1])
+    nickname = parts[2]
+    game_id = parts[3]
     await callback.message.edit_reply_markup()
     await bot.send_message(user_id, "✅ Ваша заявка одобрена! Добро пожаловать в клан!")
-    if user_id not in pending_users:
-        pending_users[user_id] = {"nickname": "неизвестно", "game_id": "неизвестно"}
     try:
         await bot.approve_chat_join_request(chat_id=WAIT_GROUP_CHAT_ID, user_id=user_id)
+        msg = await bot.send_message(
+            chat_id=WAIT_GROUP_CHAT_ID,
+            message_thread_id=WAIT_GROUP_TOPIC_ID,
+            text=f"📌 Новый участник:\n🎮 Ник: {nickname}\n🆔 ID: {game_id}\n👤 Telegram ID: {user_id}"
+        )
+        messages_map[user_id] = msg.message_id
     except Exception as e:
-        print("Ошибка при авто-одобрении:", e)
+        print("Ошибка при авто-одобрении или отправке данных:", e)
 
 @dp.chat_member()
 async def on_chat_member(event: types.ChatMemberUpdated):
     user_id = event.from_user.id
     old_status = event.old_chat_member.status
     new_status = event.new_chat_member.status
-    if old_status in ["left", "kicked"] and new_status == "member":
-        user_data = pending_users.get(user_id)
-        if user_data:
-            try:
-                msg = await bot.send_message(
-                    chat_id=WAIT_GROUP_CHAT_ID,
-                    message_thread_id=WAIT_GROUP_TOPIC_ID,
-                    text=f"📌 Новый участник:\n🎮 Ник: {user_data['nickname']}\n🆔 ID: {user_data['game_id']}\n👤 Telegram ID: {user_id}"
-                )
-                messages_map[user_id] = msg.message_id
-                pending_users.pop(user_id, None)
-            except Exception as e:
-                print("Ошибка отправки данных в топик:", e)
     if old_status in ["member", "administrator"] and new_status in ["left", "kicked"]:
         message_id = messages_map.get(user_id)
         if message_id:
