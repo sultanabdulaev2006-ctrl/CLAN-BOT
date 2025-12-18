@@ -38,10 +38,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         keyboard=[[KeyboardButton(text="✅ Да"), KeyboardButton(text="❌ Нет")]],
         resize_keyboard=True
     )
-    await message.answer(
-        f"🍀 Привет, {message.from_user.first_name}! Хочешь оставить заявку на вступление в клан?",
-        reply_markup=keyboard
-    )
+    await message.answer(f"🍀 Привет, {message.from_user.first_name}! Хочешь оставить заявку на вступление в клан?", reply_markup=keyboard)
 
 @dp.message(lambda m: m.text == "✅ Да")
 async def ask_age(message: types.Message, state: FSMContext):
@@ -51,10 +48,7 @@ async def ask_age(message: types.Message, state: FSMContext):
 @dp.message(lambda m: m.text == "❌ Нет")
 async def cancel(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer(
-        "😌 Хорошо. Возможно, твоя харизма ещё раскрывается. Успех любит время. ☘️",
-        reply_markup=types.ReplyKeyboardRemove()
-    )
+    await message.answer("😌 Хорошо. Возможно, твоя харизма ещё раскрывается. Успех любит время. ☘️", reply_markup=types.ReplyKeyboardRemove())
 
 @dp.message(Form.age)
 async def ask_nickname(message: types.Message, state: FSMContext):
@@ -113,9 +107,7 @@ async def reject(callback: types.CallbackQuery):
     ])
     await bot.send_message(
         user_id,
-        "❌ Твоя заявка отклонена.\n"
-        "Свободных мест нет, но можешь войти в группу ожидания.\n"
-        "Отправить ссылку?",
+        "❌ Твоя заявка отклонена.\nСвободных мест нет, но можешь войти в группу ожидания.\nОтправить ссылку?",
         reply_markup=keyboard
     )
 
@@ -136,28 +128,15 @@ async def approve(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
     await bot.send_message(user_id, "✅ Ваша заявка одобрена! Добро пожаловать в клан!")
-
-@dp.chat_join_request()
-async def on_join_request(event: types.ChatJoinRequest):
-    user_id = event.from_user.id
     user_data = pending_users.get(user_id)
-    if not user_data:
-        await event.approve()
-        return
-    text = (
-        "📌 Новый участник вступил в группу ожидания\n\n"
-        f"🎮 Ник: {user_data['nickname']}\n"
-        f"🆔 ID: {user_data['game_id']}\n"
-        f"👤 Telegram ID: {user_id}"
-    )
-    msg = await bot.send_message(
-        chat_id=WAIT_GROUP_CHAT_ID,
-        message_thread_id=WAIT_GROUP_TOPIC_ID,
-        text=text
-    )
-    messages_map[user_id] = msg.message_id
-    await event.approve()
-    pending_users.pop(user_id, None)
+    if user_data:
+        msg = await bot.send_message(
+            chat_id=WAIT_GROUP_CHAT_ID,
+            message_thread_id=WAIT_GROUP_TOPIC_ID,
+            text=f"📌 Новый участник:\n🎮 Ник: {user_data['nickname']}\n🆔 ID: {user_data['game_id']}\n👤 Telegram ID: {user_id}"
+        )
+        messages_map[user_id] = msg.message_id
+        pending_users.pop(user_id, None)
 
 @dp.chat_member()
 async def on_chat_member(event: types.ChatMemberUpdated):
@@ -168,10 +147,7 @@ async def on_chat_member(event: types.ChatMemberUpdated):
         message_id = messages_map.get(user_id)
         if message_id:
             try:
-                await bot.delete_message(
-                    chat_id=WAIT_GROUP_CHAT_ID,
-                    message_id=message_id
-                )
+                await bot.delete_message(chat_id=WAIT_GROUP_CHAT_ID, message_id=message_id)
             except:
                 pass
             messages_map.pop(user_id, None)
