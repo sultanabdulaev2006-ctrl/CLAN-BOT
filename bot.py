@@ -87,11 +87,6 @@ async def finish_form(message: types.Message, state: FSMContext):
         ]
     ])
     await bot.send_message(ADMIN_ID, admin_text, reply_markup=keyboard_admin)
-    await bot.send_message(
-        message.from_user.id,
-        "✅ Твоя заявка одобрена! Добро пожаловать в клан 🎉\n\n"
-        f"Вот твоя приватная ссылка для вступления:\n{PRIVATE_GROUP_LINK}"
-    )
     await state.clear()
 
 @dp.callback_query(lambda c: c.data.startswith("reject:"))
