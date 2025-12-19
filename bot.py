@@ -11,7 +11,6 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
-WAIT_GROUP_LINK = "https://t.me/+S8yADtnHIRhiOGNi"
 PRIVATE_GROUP_LINK = "https://t.me/+8XWLNODTnV1mNzMy"
 PRIVATE_CHAT_ID = -1003156012968
 
@@ -101,9 +100,10 @@ async def reject(callback: types.CallbackQuery):
     ])
     await bot.send_message(
         user_id,
-        "❌ Твоя заявка отклонена.\n"
-        "Свободных мест нет, но можешь войти в группу ожидания.\n"
-        "Отправить ссылку?",
+        f"❌ Твоя заявка отклонена.\n"
+        f"Свободных мест нет, но можешь войти в группу ожидания.\n"
+        f"Отправить ссылку?\n\n"
+        f"Вот приватная ссылка:\n{PRIVATE_GROUP_LINK}",
         reply_markup=keyboard
     )
 
@@ -111,7 +111,7 @@ async def reject(callback: types.CallbackQuery):
 async def join_wait(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
-    await bot.send_message(user_id, f"🕓 Ссылка на группу ожидания:\n{WAIT_GROUP_LINK}")
+    await bot.send_message(user_id, f"🕓 Ссылка на вступление:\n{PRIVATE_GROUP_LINK}")
     await callback.answer("Ссылка отправлена!", show_alert=True)
 
 @dp.chat_join_request()
