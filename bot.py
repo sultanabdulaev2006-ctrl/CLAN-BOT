@@ -2,28 +2,21 @@ import os
 import asyncio
 from datetime import datetime
 from aiohttp import web
-
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import (
-    ReplyKeyboardMarkup, KeyboardButton,
-    InlineKeyboardMarkup, InlineKeyboardButton
-)
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
-WAIT_GROUP_LINK = "https://t.me/+8XWLNODTnV1mNzMy"
-WAIT_GROUP_CHAT_ID = -1003156012968
-WAIT_GROUP_TOPIC_ID = 20
+WAIT_GROUP_LINK = "https://t.me/+S8yADtnHIRhiOGNi"
+PRIVATE_GROUP_LINK = "https://t.me/+8XWLNODTnV1mNzMy"
+PRIVATE_CHAT_ID = -1003156012968
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-
-pending_users = {}
-messages_map = {}
 
 class Form(StatesGroup):
     age = State()
@@ -80,7 +73,7 @@ async def finish_form(message: types.Message, state: FSMContext):
     admin_text = (
         "📥 Новая заявка в клан XARIZMA!\n\n"
         f"👤 Имя: {message.from_user.full_name}\n"
-        f"🔗 Username: @{message.from_user.username}\n"
+        f"🔗 Username: @{message.from_user.username or 'нет'}\n"
         f"🆔 Telegram ID: {message.from_user.id}\n\n"
         f"🔞 Возраст: {data['age']}\n"
         f"🎮 Ник: {data['nickname']}\n"
@@ -89,11 +82,16 @@ async def finish_form(message: types.Message, state: FSMContext):
     )
     keyboard_admin = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve:{message.from_user.id}:{data['nickname']}:{data['game_id']}"),
+            InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve:{message.from_user.id}"),
             InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject:{message.from_user.id}")
         ]
     ])
     await bot.send_message(ADMIN_ID, admin_text, reply_markup=keyboard_admin)
+    await bot.send_message(
+        message.from_user.id,
+        "✅ Твоя заявка одобрена! Добро пожаловать в клан 🎉\n\n"
+        f"Вот твоя приватная ссылка для вступления:\n{PRIVATE_GROUP_LINK}"
+    )
     await state.clear()
 
 @dp.callback_query(lambda c: c.data.startswith("reject:"))
@@ -121,38 +119,10 @@ async def join_wait(callback: types.CallbackQuery):
     await bot.send_message(user_id, f"🕓 Ссылка на группу ожидания:\n{WAIT_GROUP_LINK}")
     await callback.answer("Ссылка отправлена!", show_alert=True)
 
-@dp.callback_query(lambda c: c.data.startswith("approve:"))
-async def approve(callback: types.CallbackQuery):
-    parts = callback.data.split(":")
-    user_id = int(parts[1])
-    nickname = parts[2]
-    game_id = parts[3]
-    await callback.message.edit_reply_markup()
-    await bot.send_message(user_id, "✅ Ваша заявка одобрена! Добро пожаловать в клан!")
-    try:
-        await bot.approve_chat_join_request(chat_id=WAIT_GROUP_CHAT_ID, user_id=user_id)
-        msg = await bot.send_message(
-            chat_id=WAIT_GROUP_CHAT_ID,
-            message_thread_id=WAIT_GROUP_TOPIC_ID,
-            text=f"📌 Новый участник:\n🎮 Ник: {nickname}\n🆔 ID: {game_id}\n👤 Telegram ID: {user_id}"
-        )
-        messages_map[user_id] = msg.message_id
-    except Exception as e:
-        print("Ошибка при авто-одобрении или отправке данных:", e)
-
-@dp.chat_member()
-async def on_chat_member(event: types.ChatMemberUpdated):
-    user_id = event.from_user.id
-    old_status = event.old_chat_member.status
-    new_status = event.new_chat_member.status
-    if old_status in ["member", "administrator"] and new_status in ["left", "kicked"]:
-        message_id = messages_map.get(user_id)
-        if message_id:
-            try:
-                await bot.delete_message(chat_id=WAIT_GROUP_CHAT_ID, message_id=message_id)
-            except:
-                pass
-            messages_map.pop(user_id, None)
+@dp.chat_join_request()
+async def handle_join_request(event: types.ChatJoinRequest):
+    if event.chat.id == PRIVATE_CHAT_ID:
+        await bot.approve_chat_join_request(chat_id=PRIVATE_CHAT_ID, user_id=event.from_user.id)
 
 async def handle_root(request):
     return web.Response(text="Bot is running ✓")
