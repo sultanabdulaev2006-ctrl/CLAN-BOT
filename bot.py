@@ -100,10 +100,7 @@ async def reject(callback: types.CallbackQuery):
     ])
     await bot.send_message(
         user_id,
-        f"❌ Твоя заявка отклонена.\n"
-        f"Свободных мест нет, но можешь войти в группу ожидания.\n"
-        f"Отправить ссылку?\n\n"
-        f"Вот приватная ссылка:\n{PRIVATE_GROUP_LINK}",
+        "❌ Твоя заявка отклонена.\nСвободных мест нет, но можешь войти в группу ожидания.\nОтправить ссылку?",
         reply_markup=keyboard
     )
 
@@ -111,8 +108,13 @@ async def reject(callback: types.CallbackQuery):
 async def join_wait(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     await callback.message.edit_reply_markup()
-    await bot.send_message(user_id, f"🕓 Ссылка на вступление:\n{PRIVATE_GROUP_LINK}")
+    await bot.send_message(user_id, f"🕓 Вот твоя приватная ссылка для вступления:\n{PRIVATE_GROUP_LINK}")
     await callback.answer("Ссылка отправлена!", show_alert=True)
+
+@dp.callback_query(lambda c: c.data.startswith("no_join:"))
+async def no_join(callback: types.CallbackQuery):
+    await callback.message.edit_reply_markup()
+    await callback.answer("Ты отказался от группы ожидания.", show_alert=True)
 
 @dp.chat_join_request()
 async def handle_join_request(event: types.ChatJoinRequest):
