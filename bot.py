@@ -1,7 +1,6 @@
 import os
 import asyncio
 from datetime import datetime
-from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
@@ -9,19 +8,23 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
+# ===== Переменные окружения (Replit Secrets) =====
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 PRIVATE_GROUP_LINK = "https://t.me/+8XWLNODTnV1mNzMy"
 PRIVATE_CHAT_ID = -1003156012968
 
+# ===== Инициализация бота =====
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
+# ===== FSM для формы =====
 class Form(StatesGroup):
     age = State()
     nickname = State()
     game_id = State()
 
+# ===== Команда /start =====
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -34,11 +37,13 @@ async def cmd_start(message: types.Message, state: FSMContext):
         reply_markup=keyboard
     )
 
+# ===== Ответ на "Да" =====
 @dp.message(lambda m: m.text == "✅ Да")
 async def ask_age(message: types.Message, state: FSMContext):
     await state.set_state(Form.age)
     await message.answer("🔞 Сколько тебе лет?", reply_markup=types.ReplyKeyboardRemove())
 
+# ===== Ответ на "Нет" =====
 @dp.message(lambda m: m.text == "❌ Нет")
 async def cancel(message: types.Message, state: FSMContext):
     await state.clear()
@@ -47,6 +52,7 @@ async def cancel(message: types.Message, state: FSMContext):
         reply_markup=types.ReplyKeyboardRemove()
     )
 
+# ===== Обработка возраста =====
 @dp.message(Form.age)
 async def ask_nickname(message: types.Message, state: FSMContext):
     age = message.text
@@ -57,17 +63,20 @@ async def ask_nickname(message: types.Message, state: FSMContext):
     await state.set_state(Form.nickname)
     await message.answer("🎮 Напиши свой игровой ник.")
 
+# ===== Обработка ника =====
 @dp.message(Form.nickname)
 async def ask_game_id(message: types.Message, state: FSMContext):
     await state.update_data(nickname=message.text)
     await state.set_state(Form.game_id)
     await message.answer("💻✍🏻 Отправь свой игровой ID из CPM.")
 
+# ===== Обработка ID и отправка администратору =====
 @dp.message(Form.game_id)
 async def finish_form(message: types.Message, state: FSMContext):
     await state.update_data(game_id=message.text)
     data = await state.get_data()
     await message.answer("📝 Твоя заявка обрабатывается, пожалуйста, подождите...")
+    
     now = datetime.now().strftime("%d.%m.%Y, %H:%M")
     admin_text = (
         "📥 Новая заявка в клан XARIZMA!\n\n"
@@ -88,6 +97,7 @@ async def finish_form(message: types.Message, state: FSMContext):
     await bot.send_message(ADMIN_ID, admin_text, reply_markup=keyboard_admin)
     await state.clear()
 
+# ===== Callback: отклонение заявки =====
 @dp.callback_query(lambda c: c.data.startswith("reject:"))
 async def reject(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
@@ -104,6 +114,7 @@ async def reject(callback: types.CallbackQuery):
         reply_markup=keyboard
     )
 
+# ===== Callback: согласие на группу ожидания =====
 @dp.callback_query(lambda c: c.data.startswith("join_wait:"))
 async def join_wait(callback: types.CallbackQuery):
     user_id = int(callback.data.split(":")[1])
@@ -111,27 +122,19 @@ async def join_wait(callback: types.CallbackQuery):
     await bot.send_message(user_id, f"🕓 Вот твоя приватная ссылка для вступления:\n{PRIVATE_GROUP_LINK}")
     await callback.answer("Ссылка отправлена!", show_alert=True)
 
+# ===== Callback: отказ от группы ожидания =====
 @dp.callback_query(lambda c: c.data.startswith("no_join:"))
 async def no_join(callback: types.CallbackQuery):
     await callback.message.edit_reply_markup()
     await callback.answer("Ты отказался от группы ожидания.", show_alert=True)
 
+# ===== Обработка запросов на вступление в чат =====
 @dp.chat_join_request()
 async def handle_join_request(event: types.ChatJoinRequest):
     if event.chat.id == PRIVATE_CHAT_ID:
         await bot.approve_chat_join_request(chat_id=PRIVATE_CHAT_ID, user_id=event.from_user.id)
 
-async def handle_root(request):
-    return web.Response(text="Bot is running ✓")
-
-async def start_bot():
-    await dp.start_polling(bot)
-
-async def init_app():
-    app = web.Application()
-    app.router.add_get("/", handle_root)
-    asyncio.create_task(start_bot())
-    return app
-
+# ===== Запуск бота через polling =====
 if __name__ == "__main__":
-    web.run_app(init_app(), host="0.0.0.0", port=8080)
+    print("Бот стартовал ✅")
+    asyncio.run(dp.start_polling(bot))
